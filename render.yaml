@@ -1,0 +1,27 @@
+# Render Blueprint: one Docker web service serves both the built frontend
+# and the /api REST backend (see Dockerfile). DART sync is triggered by an
+# external cron (cron-job.org) hitting POST /api/sync with X-Sync-Token,
+# not by Render itself -- Render's free tier has no free cron option, and
+# an external pinger also keeps the free instance from sleeping.
+services:
+  - type: web
+    name: dealscreener
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: DART_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SYNC_SECRET_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
