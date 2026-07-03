@@ -213,6 +213,14 @@ function ChartTooltip({ active, payload, label }: any) {
 
 function MetricAreaChart({ title, data, color, refVal, refLabel }: { title:string; data:TSPoint[]; color:string; refVal?:number; refLabel?:string }) {
   const id = `g-${title.replace(/[^a-z0-9]/gi,"")}`;
+  if (data.length === 0) {
+    return (
+      <div className="border border-border/60 rounded-xl p-4 bg-card shadow-sm">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">{title}</p>
+        <div className="h-[148px] flex items-center justify-center text-[12px] text-muted-foreground">데이터 부족</div>
+      </div>
+    );
+  }
   return (
     <div className="border border-border/60 rounded-xl p-4 bg-card shadow-sm">
       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">{title}</p>
