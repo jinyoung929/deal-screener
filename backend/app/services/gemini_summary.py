@@ -34,7 +34,7 @@ def summarize_flag(tag: str, basis: str) -> str:
 
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        model = genai.GenerativeModel("gemini-3.5-flash")
         response = model.generate_content(_PROMPT_TEMPLATE.format(tag=tag, basis=basis))
         text = (response.text or "").strip()
         return text or _template_fallback(tag, basis)

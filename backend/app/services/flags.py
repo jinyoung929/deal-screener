@@ -28,6 +28,20 @@ def _eok(won: float) -> str:
 def detect_flags(curr: dict, prev: dict, curr_debt_ratio: float | None, prev_debt_ratio: float | None) -> list[DetectedFlag]:
     flags: list[DetectedFlag] = []
 
+    # Negative equity makes 부채비율(부채/자본) mathematically nonsensical
+    # (e.g. -4912%) rather than just "high" -- surface it as its own flag
+    # (완전자본잠식) instead of letting it corrupt the debt-ratio-jump check
+    # below.
+    curr_equity, prev_equity = curr.get("total_equity"), prev.get("total_equity")
+    if curr_equity is not None and curr_equity < 0:
+        flags.append(DetectedFlag(
+            tag="완전자본잠식",
+            severity="high",
+            basis=f"당기 자본총계 {_eok(curr_equity)}으로 자본잠식 상태" + (
+                f" (전기 {_eok(prev_equity)})" if prev_equity is not None else ""
+            ),
+        ))
+
     revenue_growth = _pct_change(curr.get("revenue"), prev.get("revenue"))
     receivables_growth = _pct_change(curr.get("receivables"), prev.get("receivables"))
     if revenue_growth is not None and receivables_growth is not None and receivables_growth - revenue_growth > 15:
@@ -53,7 +67,8 @@ def detect_flags(curr: dict, prev: dict, curr_debt_ratio: float | None, prev_deb
             basis=f"영업이익 전기 대비 {op_income_growth:.1f}% 감소",
         ))
 
-    if curr_debt_ratio is not None and prev_debt_ratio is not None and curr_debt_ratio - prev_debt_ratio > 20:
+    equity_positive_both_years = curr_equity is not None and curr_equity > 0 and prev_equity is not None and prev_equity > 0
+    if equity_positive_both_years and curr_debt_ratio is not None and prev_debt_ratio is not None and curr_debt_ratio - prev_debt_ratio > 20:
         flags.append(DetectedFlag(
             tag="부채비율 상승",
             severity="high" if curr_debt_ratio > 200 else "medium",

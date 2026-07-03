@@ -74,7 +74,10 @@ function computeBreakdown(c: Company) {
   const clamp = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
   const zRisk  = latestZ < 1.81 ? clamp(80+(1.81-latestZ)*25) : latestZ < 2.99 ? clamp(30+(2.99-latestZ)/(2.99-1.81)*50) : clamp(25-(latestZ-2.99)*8);
   const mRisk  = latestM > -1.78 ? 90 : latestM > -2.22 ? clamp(50+(latestM+2.22)/(-1.78+2.22)*40) : clamp(40+(latestM+3)*20);
-  const dRisk  = latestD > 300 ? 100 : latestD > 200 ? clamp(70+(latestD-200)/10) : latestD > 100 ? clamp(30+(latestD-100)/100*40) : clamp(latestD/3);
+  // Negative debt ratio means negative equity (완전자본잠식) -- the most
+  // severe leverage risk, not the safest (latestD/3 would otherwise clamp
+  // very negative ratios down to 0 risk).
+  const dRisk  = latestD < 0 ? 100 : latestD > 300 ? 100 : latestD > 200 ? clamp(70+(latestD-200)/10) : latestD > 100 ? clamp(30+(latestD-100)/100*40) : clamp(latestD/3);
   const oRisk  = latestO < 0 ? clamp(70+(-latestO)*3) : latestO < 5 ? clamp(40+(5-latestO)*6) : clamp(25-(latestO-5)*2);
   const trRisk = c.scoreTrend === "up" ? 80 : c.scoreTrend === "stable" ? 40 : 15;
   const flRisk = clamp(c.flags.length * 22);

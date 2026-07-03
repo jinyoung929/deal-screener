@@ -135,7 +135,12 @@ def compute_breakdown(
         else _clamp(40 + (m + 3) * 20)
     )
     d_risk = (
-        100 if d > 300
+        # Negative debt ratio means negative equity (완전자본잠식), the most
+        # severe end of leverage risk -- must score as max risk, not fall
+        # through to d/3 which would clamp to 0 (minimum risk) for very
+        # negative d and read as "safe".
+        100 if d < 0
+        else 100 if d > 300
         else _clamp(70 + (d - 200) / 10) if d > 200
         else _clamp(30 + (d - 100) / 100 * 40) if d > 100
         else _clamp(d / 3)
