@@ -1,0 +1,20 @@
+# frontend
+frontend/node_modules/
+frontend/dist/
+
+# backend
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv/
+backend/venv/
+backend/*.pyc
+backend/*.db
+
+# env
+.env
+.env.local
+**/.env
+**/.env.local
+
+# misc
+.DS_Store
