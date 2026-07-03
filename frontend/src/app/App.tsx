@@ -358,11 +358,15 @@ function PrintView({ companies }: { companies: Company[] }) {
 // ── KPI Strip ─────────────────────────────────────────────────────────────────
 
 function KPIStrip({ companies }: { companies: Company[] }) {
-  const danger=companies.filter(c=>getRisk(c.score)==="danger").length;
-  const warning=companies.filter(c=>getRisk(c.score)==="warning").length;
-  const safe=companies.filter(c=>getRisk(c.score)==="safe").length;
-  const avg=Math.round(companies.reduce((s,c)=>s+c.score,0)/companies.length);
-  const risen=companies.filter(c=>c.score>c.prevScore).length;
+  // Companies whose sync hasn't produced a score yet (e.g. corp_code lookup
+  // failed) are excluded from these tallies rather than silently counted as
+  // "safe" -- getRisk(null) would otherwise fall through to the safe bucket.
+  const scored = companies.filter(c=>c.score!=null);
+  const danger=scored.filter(c=>getRisk(c.score)==="danger").length;
+  const warning=scored.filter(c=>getRisk(c.score)==="warning").length;
+  const safe=scored.filter(c=>getRisk(c.score)==="safe").length;
+  const avg=scored.length ? Math.round(scored.reduce((s,c)=>s+c.score,0)/scored.length) : 0;
+  const risen=scored.filter(c=>c.score>c.prevScore).length;
   const cards=[
     { label:"전체 분석", value:companies.length, unit:"개 기업", icon:Building2, iconCls:"bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400", grad:"from-blue-500/8" },
     { label:"위험 경보", value:danger, unit:"건 즉시 검토", icon:ShieldAlert, iconCls:riskConfig.danger.kpiIcon, grad:"from-red-500/8" },
@@ -1260,7 +1264,11 @@ export default function App() {
 
   useEffect(()=>{
     api.getCompanies()
-      .then(setCompanies)
+      // Companies whose sync never produced a score (e.g. DART corp_code
+      // lookup failed) are held back from the UI entirely rather than
+      // rendered with broken/NaN score widgets -- they'll appear once a
+      // sync run succeeds for them.
+      .then(rows=>setCompanies(rows.filter((c:Company)=>c.score!=null)))
       .catch(e=>setCompaniesError(String(e)))
       .finally(()=>setCompaniesLoading(false));
     api.getMe().then(setUser).catch(()=>setUser(null)).finally(()=>setAuthChecked(true));
