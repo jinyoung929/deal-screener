@@ -14,7 +14,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
-import type { ApiUser } from "@/lib/api";
+import { api, type ApiUser } from "@/lib/api";
 import type { Company, TSPoint, AiFlag, ViewId } from "./types";
 import { riskConfig, severityConfig, ANALYSIS_DATE, ANALYSIS_VER } from "./constants";
 import { getRisk, fmtMarketCap, fmtDate, fmtAxisValue, computeBreakdown } from "./utils";
