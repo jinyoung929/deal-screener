@@ -106,7 +106,7 @@ function exportCSV(companies: Company[]) {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-const SECTORS = ["화학","IT","바이오","철강","식품","중공업","반도체"];
+const SECTORS = ["화학","IT","바이오","철강","식품","중공업","반도체","기타"];
 // Real current date rather than a fixed mock string. This is a display
 // label, not a claim about when DART data was last synced -- see each
 // company's own lastDisclosure for that.
@@ -528,11 +528,72 @@ function FilterPanel({ filters, setFilters }: { filters:Filters; setFilters:(f:F
   );
 }
 
+// ── Add Company Form ─────────────────────────────────────────────────────────
+
+function AddCompanyForm({ user, onAdded }: { user: ApiUser | null; onAdded: (c: Company) => void }) {
+  const [open, setOpen] = useState(false);
+  const [ticker, setTicker] = useState("");
+  const [sector, setSector] = useState(SECTORS[0]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!user) {
+    return (
+      <a href={api.loginUrl} title="기업 추가는 로그인이 필요합니다"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-border hover:bg-muted transition-colors text-muted-foreground">
+        <Plus size={13}/> 기업 추가
+      </a>
+    );
+  }
+
+  const submit = async () => {
+    if (!/^\d{6}$/.test(ticker)) { setError("종목코드는 6자리 숫자입니다"); return; }
+    setLoading(true); setError(null);
+    try {
+      const { company } = await api.addCompany(ticker, sector);
+      onAdded(company);
+      setOpen(false); setTicker("");
+    } catch (e: any) {
+      setError(e.message?.includes("409") ? "이미 등록된 기업입니다" : e.message?.includes("404") ? "종목코드를 찾을 수 없습니다" : "추가에 실패했습니다");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button onClick={()=>setOpen(!open)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+        <Plus size={13}/> 기업 추가
+      </button>
+      {open && (
+        <div className="absolute top-9 right-0 z-50 bg-card border border-border rounded-xl shadow-2xl w-64 p-4">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">종목코드로 추가</p>
+          <input type="text" placeholder="예: 011170" value={ticker} onChange={e=>setTicker(e.target.value.trim())}
+            className="w-full px-3 py-2 text-[12px] bg-background border border-border rounded-lg outline-none focus:border-blue-400/60 transition-colors mb-2"/>
+          <select value={sector} onChange={e=>setSector(e.target.value)}
+            className="w-full px-3 py-2 text-[12px] bg-background border border-border rounded-lg outline-none mb-2">
+            {SECTORS.map(s=><option key={s} value={s}>{s}</option>)}
+          </select>
+          {error && <p className="text-[11px] text-red-500 mb-2">{error}</p>}
+          <button onClick={submit} disabled={loading}
+            className="w-full px-3 py-2 text-[12px] font-semibold rounded-lg text-white shadow-sm disabled:opacity-50"
+            style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)"}}>
+            {loading?"DART에서 조회 중…":"추가"}
+          </button>
+          <p className="text-[10px] text-muted-foreground mt-2">추가 즉시 DART 데이터를 조회해 반영합니다 (몇 초 소요)</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard View ────────────────────────────────────────────────────────────
 
-function DashboardView({ companies, onSelectCompany, onAddToCompare, compareIds, watchIds, toggleWatch }: {
+function DashboardView({ companies, onSelectCompany, onAddToCompare, compareIds, watchIds, toggleWatch, user, onCompanyAdded }: {
   companies:Company[]; onSelectCompany:(c:Company)=>void; onAddToCompare:(id:number)=>void;
   compareIds:number[]; watchIds:number[]; toggleWatch:(id:number)=>void;
+  user:ApiUser|null; onCompanyAdded:(c:Company)=>void;
 }) {
   const [filters,setFilters]=useState<Filters>({search:"",sectors:[],riskLevels:[],sortBy:"score",sortDir:"desc"});
 
@@ -567,6 +628,7 @@ function DashboardView({ companies, onSelectCompany, onAddToCompare, compareIds,
                 className="pl-8 pr-3 py-1.5 text-[12px] bg-muted/60 rounded-lg border border-border/40 outline-none w-40 placeholder:text-muted-foreground focus:border-blue-400/50 transition-colors"/>
             </div>
             <div className="w-px h-5 bg-border/60"/>
+            <AddCompanyForm user={user} onAdded={onCompanyAdded}/>
             <button onClick={()=>exportCSV(filtered)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-border hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
               <FileSpreadsheet size={13}/> CSV
@@ -1324,7 +1386,7 @@ export default function App() {
       <div id="ds-app" style={{fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,sans-serif"}} className="flex h-screen bg-background text-foreground overflow-hidden">
         <Sidebar view={view==="detail"?"dashboard":view} setView={handleNav} dark={dark} setDark={setDark} watchCount={watchIds.length} user={user}/>
         <main className="flex-1 overflow-hidden">
-          {view==="dashboard"&&<DashboardView companies={companies} onSelectCompany={handleSelectCompany} onAddToCompare={handleAddToCompare} compareIds={compareIds} watchIds={watchIds} toggleWatch={toggleWatch}/>}
+          {view==="dashboard"&&<DashboardView companies={companies} onSelectCompany={handleSelectCompany} onAddToCompare={handleAddToCompare} compareIds={compareIds} watchIds={watchIds} toggleWatch={toggleWatch} user={user} onCompanyAdded={c=>setCompanies(prev=>[...prev, c])}/>}
           {view==="detail"&&selectedCompany&&<DetailView company={selectedCompany} onBack={()=>handleNav("dashboard")} isWatched={watchIds.includes(selectedCompany.id)} toggleWatch={()=>toggleWatch(selectedCompany.id)}/>}
           {view==="watchlist"&&<WatchListView companies={companies} watchIds={watchIds} toggleWatch={toggleWatch} onSelectCompany={handleSelectCompany}/>}
           {view==="compare"&&<CompareView allCompanies={companies} compareIds={compareIds} setCompareIds={setCompareIds}/>}

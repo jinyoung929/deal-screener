@@ -25,6 +25,12 @@ export interface ApiUser {
 export const api = {
   getCompanies: () => request<any[]>("/api/companies"),
   getCompany: (id: number) => request<any>(`/api/companies/${id}`),
+  addCompany: (ticker: string, sector: string) =>
+    request<{ company: any; sync: any }>("/api/companies", {
+      method: "POST",
+      body: JSON.stringify({ ticker, sector }),
+    }),
+  removeCompany: (id: number) => request<{ status: string }>(`/api/companies/${id}`, { method: "DELETE" }),
 
   getMe: () => request<ApiUser | null>("/auth/me"),
   loginUrl: "/auth/google/login",

@@ -18,6 +18,12 @@ def _target_years() -> list[str]:
     return [str(latest), str(latest - 1), str(latest - 2)]
 
 
+def sync_one_now(db: Session, company: Company) -> dict:
+    """Sync a single company immediately (used when a user adds a new
+    ticker), rather than waiting for the next scheduled /api/sync run."""
+    return sync_company(db, company, _target_years())
+
+
 def ensure_companies(db: Session) -> list[Company]:
     companies = []
     for spec in TRACKED_COMPANIES:

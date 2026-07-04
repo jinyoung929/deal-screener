@@ -32,6 +32,7 @@ class Company(Base):
     flags: Mapped[list["Flag"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     ownership: Mapped[list["Ownership"]] = relationship(back_populates="company", cascade="all, delete-orphan")
     related_tx: Mapped[list["RelatedTx"]] = relationship(back_populates="company", cascade="all, delete-orphan")
+    watchlist_entries: Mapped[list["Watchlist"]] = relationship(cascade="all, delete-orphan")
 
 
 class MetricsHistory(Base):

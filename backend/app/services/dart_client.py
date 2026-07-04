@@ -48,6 +48,17 @@ def fetch_corp_code_map(tickers: set[str]) -> dict[str, str]:
     return result
 
 
+def fetch_company_name(corp_code: str) -> str | None:
+    """company.json (기업개황) -- used to get the real company name when a
+    user adds a new ticker, so we never ask them to type it themselves."""
+    resp = httpx.get(f"{BASE_URL}/company.json", params={"crtfc_key": _api_key(), "corp_code": corp_code}, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("status") != "000":
+        return None
+    return data.get("corp_name")
+
+
 def fetch_account_items(corp_code: str, bsns_year: str, fs_div: str = "CFS") -> list[dict]:
     """Fetch one year of standard-account financial statement line items.
     fs_div: CFS(연결) or OFS(별도). Falls back to OFS if CFS has no rows."""
