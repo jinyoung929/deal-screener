@@ -76,12 +76,10 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
     }
 
     year_ratios: dict[str, dict] = {}
-    year_rows: dict[str, MetricsHistory] = {}
     for year, m in parsed_by_year.items():
         d_ratio = scoring.debt_ratio(m)
         o_margin = scoring.op_margin(m)
-        z = scoring.altman_z_prime(m)
-        year_ratios[year] = {"debt_ratio": d_ratio, "op_margin": o_margin, "altman_z": z}
+        year_ratios[year] = {"debt_ratio": d_ratio, "op_margin": o_margin}
 
         row = existing_rows.get(year)
         if row is None:
@@ -95,12 +93,6 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
         row.revenue = revenue_won / 1e8 if revenue_won is not None else None
         row.debt_ratio = d_ratio
         row.op_margin = o_margin
-        row.altman_z = z
-        year_rows[year] = row
-
-    beneish_m = scoring.beneish_m_score(curr_metrics, prev_metrics) if prev_metrics else None
-    year_ratios[latest_year]["beneish_m"] = beneish_m
-    year_rows[latest_year].beneish_m = beneish_m
 
     # --- flags (rule-based, only when we have two comparable years) ---
     detected = []
@@ -117,24 +109,22 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
         db.add(Flag(company_id=company.id, tag=f.tag, severity=f.severity, summary=summary, basis=f.basis))
 
     # --- weighted risk score ---
-    # "trend" feeds into the score itself (10% weight), so it can't be
-    # derived from the score-to-be-computed. Instead we derive it from the
-    # underlying fundamentals: did Altman Z (financial health) worsen or
-    # improve vs the prior year? Falls back to debt ratio direction if Z is
-    # unavailable for either year, and to "stable" if neither is available.
+    # "trend" feeds into the score itself, so it can't be derived from the
+    # score-to-be-computed. Instead we derive it from the underlying
+    # fundamentals: did leverage (부채비율) worsen or improve vs the prior
+    # year? Falls back to op margin direction if debt ratio is unavailable
+    # for either year, and to "stable" if neither is available.
     prior_score = company.score
-    z_curr, z_prev = year_ratios[latest_year]["altman_z"], year_ratios.get(prev_year, {}).get("altman_z")
     d_curr, d_prev = year_ratios[latest_year]["debt_ratio"], year_ratios.get(prev_year, {}).get("debt_ratio")
-    if z_curr is not None and z_prev is not None:
-        trend = "up" if z_curr < z_prev else "down" if z_curr > z_prev else "stable"
-    elif d_curr is not None and d_prev is not None:
+    o_curr, o_prev = year_ratios[latest_year]["op_margin"], year_ratios.get(prev_year, {}).get("op_margin")
+    if d_curr is not None and d_prev is not None:
         trend = "up" if d_curr > d_prev else "down" if d_curr < d_prev else "stable"
+    elif o_curr is not None and o_prev is not None:
+        trend = "up" if o_curr < o_prev else "down" if o_curr > o_prev else "stable"
     else:
         trend = "stable"
 
     breakdown = scoring.compute_breakdown(
-        latest_z=year_ratios[latest_year]["altman_z"],
-        latest_m=beneish_m,
         latest_debt_ratio=year_ratios[latest_year]["debt_ratio"],
         latest_op_margin=year_ratios[latest_year]["op_margin"],
         score_trend=trend,
@@ -163,5 +153,4 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
         "latest_year": latest_year,
         "score": new_score,
         "flags": len(detected),
-        "beneish_m": beneish_m,
     }

@@ -33,7 +33,6 @@ interface Company {
   scoreTrend: "up" | "down" | "stable";
   lastDisclosure: string | null; flags: string[];
   dartNo: string | null; auditor: string | null; fiscalYear: string | null;
-  altmanZ: TSPoint[]; beneishM: TSPoint[];
   revenue: TSPoint[]; debtRatio: TSPoint[]; opMargin: TSPoint[];
   aiFlags: AiFlag[]; relatedTx: RelatedTx[]; ownership: Ownership[];
   description: string;
@@ -66,14 +65,10 @@ const fmtAmount = (v: number) => `${v.toLocaleString()}억원`;
 const dartFilingUrl = (dartNo: string | null) => dartNo ? `https://dart.fss.or.kr/dsab007/main.do?rcpNo=${dartNo}` : null;
 
 function computeBreakdown(c: Company) {
-  const latestZ = c.altmanZ.at(-1)?.value ?? 3;
-  const latestM = c.beneishM.at(-1)?.value ?? -3;
   const latestD = c.debtRatio.at(-1)?.value ?? 100;
   const latestO = c.opMargin.at(-1)?.value ?? 5;
 
   const clamp = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
-  const zRisk  = latestZ < 1.81 ? clamp(80+(1.81-latestZ)*25) : latestZ < 2.99 ? clamp(30+(2.99-latestZ)/(2.99-1.81)*50) : clamp(25-(latestZ-2.99)*8);
-  const mRisk  = latestM > -1.78 ? 90 : latestM > -2.22 ? clamp(50+(latestM+2.22)/(-1.78+2.22)*40) : clamp(40+(latestM+3)*20);
   // Negative debt ratio means negative equity (완전자본잠식) -- the most
   // severe leverage risk, not the safest (latestD/3 would otherwise clamp
   // very negative ratios down to 0 risk).
@@ -83,12 +78,10 @@ function computeBreakdown(c: Company) {
   const flRisk = clamp(c.flags.length * 22);
 
   return [
-    { label:"Altman Z-Score",  desc:"재무건전성 종합",   weight:25, risk:zRisk,  value:latestZ.toFixed(2),     hint:"Z < 1.81 위험구간" },
-    { label:"Beneish M-Score", desc:"이익조정 가능성",   weight:20, risk:mRisk,  value:latestM.toFixed(2),     hint:"M > −1.78 조작 의심" },
-    { label:"부채비율",         desc:"재무레버리지 위험", weight:20, risk:dRisk,  value:`${latestD}%`,          hint:"200% 초과 고위험" },
-    { label:"영업이익률",       desc:"수익성 위험",       weight:15, risk:oRisk,  value:`${latestO.toFixed(1)}%`, hint:"0% 미만 손실구간" },
-    { label:"스코어 추이",      desc:"위험 방향성",       weight:10, risk:trRisk, value:c.scoreTrend==="up"?"상승↑":c.scoreTrend==="down"?"하락↓":"유지—", hint:"지속 상승 시 가중" },
-    { label:"Red Flag 수",     desc:"공시 이상징후",     weight:10, risk:flRisk, value:`${c.flags.length}건`,  hint:"건당 22점 가산" },
+    { label:"부채비율",         desc:"재무레버리지 위험", weight:40, risk:dRisk,  value:`${latestD}%`,          hint:"200% 초과 고위험" },
+    { label:"영업이익률",       desc:"수익성 위험",       weight:30, risk:oRisk,  value:`${latestO.toFixed(1)}%`, hint:"0% 미만 손실구간" },
+    { label:"스코어 추이",      desc:"위험 방향성",       weight:15, risk:trRisk, value:c.scoreTrend==="up"?"상승↑":c.scoreTrend==="down"?"하락↓":"유지—", hint:"지속 상승 시 가중" },
+    { label:"Red Flag 수",     desc:"공시 이상징후",     weight:15, risk:flRisk, value:`${c.flags.length}건`,  hint:"건당 22점 가산" },
   ];
 }
 
@@ -297,7 +290,7 @@ function ScoreBreakdownPanel({ company, onClose }: { company: Company; onClose: 
           </div>
         </div>
         <p className="text-[10px] text-muted-foreground/60 pb-1">
-          * 가중치: Altman Z(25%) + Beneish M(20%) + 부채비율(20%) + 영업이익률(15%) + 스코어추이(10%) + Red Flag(10%) = 100%
+          * 가중치: 부채비율(40%) + 영업이익률(30%) + 스코어추이(15%) + Red Flag(15%) = 100%
         </p>
       </div>
     </div>
@@ -325,7 +318,7 @@ function PrintView({ companies }: { companies: Company[] }) {
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:"11px"}}>
         <thead>
           <tr style={{background:"#030213",color:"#fff"}}>
-            {["#","기업명","업종","시총","스코어","전일대비","위험등급","Altman Z","Beneish M","부채비율","영업이익률","Red Flags","감사인","공시일"].map(h=>(
+            {["#","기업명","업종","시총","스코어","전일대비","위험등급","부채비율","영업이익률","Red Flags","감사인","공시일"].map(h=>(
               <th key={h} style={{padding:"6px 8px",textAlign:"left",fontWeight:"600",fontSize:"10px",whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr>
@@ -333,7 +326,6 @@ function PrintView({ companies }: { companies: Company[] }) {
         <tbody>
           {companies.sort((a,b)=>b.score-a.score).map((c,i)=>{
             const lv=getRisk(c.score), delta=c.score-c.prevScore;
-            const latestZ=c.altmanZ.at(-1)?.value??0, latestM=c.beneishM.at(-1)?.value??0;
             const latestD=c.debtRatio.at(-1)?.value??0, latestO=c.opMargin.at(-1)?.value??0;
             const bg = lv==="danger"?"#fff5f5":lv==="warning"?"#fffbf0":"#f0fdf4";
             const scoreColor = lv==="danger"?"#dc2626":lv==="warning"?"#d97706":"#16a34a";
@@ -346,8 +338,6 @@ function PrintView({ companies }: { companies: Company[] }) {
                 <td style={{padding:"5px 8px",fontFamily:"monospace",fontWeight:"700",color:scoreColor,textAlign:"right"}}>{c.score}</td>
                 <td style={{padding:"5px 8px",fontFamily:"monospace",fontWeight:"600",color:delta>0?"#dc2626":delta<0?"#16a34a":"#666",textAlign:"right"}}>{delta>0?`+${delta}`:delta}</td>
                 <td style={{padding:"5px 8px"}}><span style={{background:scoreColor,color:"#fff",padding:"1px 6px",borderRadius:"3px",fontSize:"10px",fontWeight:"600"}}>{riskConfig[lv].label}</span></td>
-                <td style={{padding:"5px 8px",fontFamily:"monospace",textAlign:"right",color:latestZ<1.81?"#dc2626":"#333"}}>{latestZ.toFixed(2)}</td>
-                <td style={{padding:"5px 8px",fontFamily:"monospace",textAlign:"right",color:latestM>-1.78?"#dc2626":"#333"}}>{latestM.toFixed(2)}</td>
                 <td style={{padding:"5px 8px",fontFamily:"monospace",textAlign:"right",color:latestD>200?"#dc2626":"#333"}}>{latestD}%</td>
                 <td style={{padding:"5px 8px",fontFamily:"monospace",textAlign:"right",color:latestO<0?"#dc2626":"#333"}}>{latestO.toFixed(1)}%</td>
                 <td style={{padding:"5px 8px",fontSize:"10px",color:"#555"}}>{c.flags.slice(0,2).join(", ")}{c.flags.length>2?` +${c.flags.length-2}`:""}</td>
@@ -359,7 +349,7 @@ function PrintView({ companies }: { companies: Company[] }) {
         </tbody>
       </table>
       <div style={{marginTop:"16px",borderTop:"1px solid #ccc",paddingTop:"8px",fontSize:"10px",color:"#888",display:"flex",justifyContent:"space-between"}}>
-        <span>위험등급: 빨강(≥66) 주의(31-65) 안전(≤30) · Altman Z: 1.81 미만=위험 · Beneish M: -1.78 초과=조작의심</span>
+        <span>위험등급: 빨강(≥66) 주의(31-65) 안전(≤30) · 부채비율 200% 초과=고위험</span>
         <span>DealScreener {ANALYSIS_VER} · 본 보고서는 AI 스크리닝 결과이며 투자 판단의 참고용입니다</span>
       </div>
     </div>
@@ -803,8 +793,6 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
   const [tab,setTab]=useState<"quant"|"ai"|"ownership">("quant");
   const [showBreakdown,setShowBreakdown]=useState(false);
   const lv=getRisk(company.score);
-  const latestZ=company.altmanZ.at(-1)?.value??null;
-  const latestM=company.beneishM.at(-1)?.value??null;
   const latestD=company.debtRatio.at(-1)?.value??null;
   const latestO=company.opMargin.at(-1)?.value??null;
   const dartUrl=dartFilingUrl(company.dartNo);
@@ -849,10 +837,8 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
                 <span className="font-mono text-sm text-muted-foreground bg-muted px-2 py-0.5 rounded">{company.ticker}</span>
               </div>
               <p className="text-[12px] text-muted-foreground leading-relaxed max-w-lg mb-3">{company.description}</p>
-              <div className="grid grid-cols-4 gap-2 max-w-lg mb-3">
+              <div className="grid grid-cols-2 gap-2 max-w-xs mb-3">
                 {[
-                  { label:"Altman Z", value:latestZ==null?"데이터 부족":latestZ.toFixed(2), good:latestZ!=null&&latestZ>2.99, bad:latestZ!=null&&latestZ<1.81 },
-                  { label:"Beneish M", value:latestM==null?"데이터 부족":latestM.toFixed(2), good:latestM!=null&&latestM<-2.22, bad:latestM!=null&&latestM>-1.78 },
                   { label:"부채비율", value:latestD==null?"데이터 부족":`${latestD}%`, good:latestD!=null&&latestD<100, bad:latestD!=null&&latestD>200 },
                   { label:"영업이익률", value:latestO==null?"데이터 부족":`${latestO.toFixed(1)}%`, good:latestO!=null&&latestO>10, bad:latestO!=null&&latestO<0 },
                 ].map(({label,value,good,bad})=>(
@@ -897,8 +883,6 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
         <div className="p-6">
           {tab==="quant"&&(
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              <MetricAreaChart title="Altman Z-Score" data={company.altmanZ} color="#ef4444" refVal={1.81} refLabel="위험"/>
-              <MetricAreaChart title="Beneish M-Score" data={company.beneishM} color="#f59e0b" refVal={-1.78} refLabel="조작의심"/>
               <MetricAreaChart title="매출액 (억원)" data={company.revenue} color="#3b82f6"/>
               <MetricAreaChart title="부채비율 (%)" data={company.debtRatio} color="#ef4444" refVal={100} refLabel="100%"/>
               <MetricAreaChart title="영업이익률 (%)" data={company.opMargin} color="#10b981" refVal={0} refLabel="BEP"/>
@@ -906,8 +890,7 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-3">지표 해석</p>
                 <div className="space-y-2.5 text-[11px]">
                   {[
-                    { name:"Altman Z", desc:"< 1.81 위험 · 1.81~2.99 회색 · > 2.99 안전", color:"#ef4444" },
-                    { name:"Beneish M", desc:"> −1.78 이익조정 의심 · < −2.22 조작가능성 낮음", color:"#f59e0b" },
+                    { name:"부채비율", desc:"100% 이하 양호 · 200% 초과 고위험 · 음수는 자본잠식", color:"#ef4444" },
                     { name:"영업이익률", desc:"0% 미만 시 손실 구간 진입", color:"#10b981" },
                   ].map(({name,desc,color})=>(
                     <div key={name} className="flex items-start gap-2">
@@ -1031,8 +1014,6 @@ function CompareView({ allCompanies, compareIds, setCompareIds }: { allCompanies
     { label:"위험 스코어", fmt:c=>c.score, highlight:"high" },
     { label:"업종", fmt:c=>c.sector, highlight:null },
     { label:"시가총액", fmt:c=>fmtMarketCap(c.marketCap), highlight:null },
-    { label:"Altman Z (최근)", fmt:c=>c.altmanZ.at(-1)?.value.toFixed(2)??"—", highlight:"low" },
-    { label:"Beneish M (최근)", fmt:c=>c.beneishM.at(-1)?.value.toFixed(2)??"—", highlight:"high" },
     { label:"부채비율 (%)", fmt:c=>c.debtRatio.at(-1)?.value??"—", highlight:"high" },
     { label:"영업이익률 (%)", fmt:c=>c.opMargin.at(-1)?.value.toFixed(1)??"—", highlight:"low" },
     { label:"Red Flag 수", fmt:c=>c.flags.length, highlight:"high" },

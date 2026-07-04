@@ -11,43 +11,25 @@ missing fields as "insufficient data" rather than guessing.
 
 # account_id -> normalized field name
 ACCOUNT_ID_MAP: dict[str, str] = {
-    "ifrs-full_Assets": "total_assets",
     "ifrs-full_Liabilities": "total_liabilities",
     "ifrs-full_Equity": "total_equity",
     "ifrs-full_EquityAttributableToOwnersOfParent": "total_equity",
-    "ifrs-full_CurrentAssets": "current_assets",
-    "ifrs-full_CurrentLiabilities": "current_liabilities",
-    "ifrs-full_RetainedEarnings": "retained_earnings",
     "ifrs-full_Revenue": "revenue",
-    "ifrs-full_CostOfSales": "cogs",
     "dart_OperatingIncomeLoss": "operating_income",
     "ifrs-full_TradeAndOtherCurrentReceivables": "receivables",
     "ifrs-full_Inventories": "inventories",
-    "ifrs-full_SellingGeneralAndAdministrativeExpense": "sga",
-    "ifrs-full_PropertyPlantAndEquipment": "ppe",
-    "ifrs-full_DepreciationExpense": "depreciation",
-    "ifrs-full_ProfitLoss": "net_income",
     "ifrs-full_CashFlowsFromUsedInOperatingActivities": "cfo",
 }
 
 # Korean substring fallback, checked in order (first match wins) when
 # account_id is missing/unmapped. Keys are normalized field names.
 ACCOUNT_NAME_FALLBACK: dict[str, list[str]] = {
-    "total_assets": ["자산총계"],
     "total_liabilities": ["부채총계"],
     "total_equity": ["자본총계"],
-    "current_assets": ["유동자산"],
-    "current_liabilities": ["유동부채"],
-    "retained_earnings": ["이익잉여금"],
     "revenue": ["매출액", "수익(매출액)", "영업수익"],
-    "cogs": ["매출원가"],
     "operating_income": ["영업이익"],
     "receivables": ["매출채권"],
     "inventories": ["재고자산"],
-    "sga": ["판매비와관리비"],
-    "ppe": ["유형자산"],
-    "depreciation": ["감가상각비"],
-    "net_income": ["당기순이익"],
     "cfo": ["영업활동현금흐름", "영업활동으로인한현금흐름"],
 }
 

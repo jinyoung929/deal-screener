@@ -36,8 +36,6 @@ def company_to_dict(company: Company) -> dict:
         "auditor": company.auditor,
         "fiscalYear": company.fiscal_year,
         "description": company.description or "",
-        "altmanZ": _ts_points(metrics, "altman_z"),
-        "beneishM": _ts_points(metrics, "beneish_m"),
         "revenue": _ts_points(metrics, "revenue"),
         "debtRatio": _ts_points(metrics, "debt_ratio"),
         "opMargin": _ts_points(metrics, "op_margin"),
