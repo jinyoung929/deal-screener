@@ -87,7 +87,12 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
         if row is None:
             row = MetricsHistory(company_id=company.id, year=year)
             db.add(row)
-        row.revenue = m.get("revenue")
+        # DART reports revenue in raw KRW won; the frontend chart is
+        # labeled "매출액 (억원)" (100M-KRW units), so convert here to match
+        # -- storing raw won produced 14-digit Y-axis tick labels that
+        # rendered as garbled "0000" strings.
+        revenue_won = m.get("revenue")
+        row.revenue = revenue_won / 1e8 if revenue_won is not None else None
         row.debt_ratio = d_ratio
         row.op_margin = o_margin
         row.altman_z = z

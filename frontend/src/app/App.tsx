@@ -466,7 +466,7 @@ function Sidebar({ view, setView, dark, setDark, watchCount, user }: {
             </div>
           </div>
         ) : (
-          <a href={api.loginUrl} className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] transition-colors" style={{color:"rgba(255,255,255,0.55)"}}>
+          <a href={api.loginUrl} className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-[12px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90" style={{background:"linear-gradient(135deg,#3b82f6,#6366f1)"}}>
             Google로 로그인
           </a>
         )}
