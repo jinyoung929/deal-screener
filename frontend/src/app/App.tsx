@@ -5,14 +5,14 @@ import {
   ChevronDown, ChevronRight, AlertTriangle, CheckCircle2,
   SlidersHorizontal, Building2, Trash2, Filter, BarChart3,
   ShieldAlert, ShieldCheck, Shield, Zap, Bookmark, BookmarkCheck,
-  ExternalLink, Download, Printer, Info, ChevronUp, FileSpreadsheet
+  ExternalLink, Download, Printer, Info, ChevronUp, FileSpreadsheet, Newspaper
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import { motion } from "motion/react";
-import { api, type ApiUser } from "@/lib/api";
+import { api, type ApiUser, type NewsArticle } from "@/lib/api";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ interface Company {
   scoreTrend: "up" | "down" | "stable";
   lastDisclosure: string | null; flags: string[];
   dartNo: string | null; auditor: string | null; fiscalYear: string | null;
-  revenue: TSPoint[]; debtRatio: TSPoint[]; opMargin: TSPoint[];
+  revenue: TSPoint[]; debtRatio: TSPoint[]; opMargin: TSPoint[]; currentRatio: TSPoint[];
   aiFlags: AiFlag[]; relatedTx: RelatedTx[]; ownership: Ownership[];
   description: string;
 }
@@ -62,11 +62,21 @@ const SECTOR_COLORS: Record<string, string> = {
 const fmtMarketCap = (v: number | null) => v == null ? "—" : v >= 10000 ? `${(v/10000).toFixed(1)}조` : `${v.toLocaleString()}억`;
 const fmtDate = (s: string | null) => s == null ? "—" : s.replace(/-/g,".");
 const fmtAmount = (v: number) => `${v.toLocaleString()}억원`;
+// Chart Y-axis labels: real revenue figures run to 6 digits in 억원, which
+// overflowed the axis area and got clipped to their trailing digits
+// ("199463" rendered as "0000"-style garbage). Abbreviate to 조 instead.
+const fmtAxisValue = (v: number) => {
+  const abs = Math.abs(v);
+  if (abs >= 10000) return `${(v/10000).toFixed(abs >= 100000 ? 0 : 1)}조`;
+  if (abs >= 1000) return `${(v/1000).toFixed(1)}천`;
+  return String(v);
+};
 const dartFilingUrl = (dartNo: string | null) => dartNo ? `https://dart.fss.or.kr/dsab007/main.do?rcpNo=${dartNo}` : null;
 
 function computeBreakdown(c: Company) {
   const latestD = c.debtRatio.at(-1)?.value ?? 100;
   const latestO = c.opMargin.at(-1)?.value ?? 5;
+  const latestCR = c.currentRatio.at(-1)?.value ?? 150;
 
   const clamp = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
   // Negative debt ratio means negative equity (완전자본잠식) -- the most
@@ -74,12 +84,14 @@ function computeBreakdown(c: Company) {
   // very negative ratios down to 0 risk).
   const dRisk  = latestD < 0 ? 100 : latestD > 300 ? 100 : latestD > 200 ? clamp(70+(latestD-200)/10) : latestD > 100 ? clamp(30+(latestD-100)/100*40) : clamp(latestD/3);
   const oRisk  = latestO < 0 ? clamp(70+(-latestO)*3) : latestO < 5 ? clamp(40+(5-latestO)*6) : clamp(25-(latestO-5)*2);
+  const crRisk = latestCR < 50 ? clamp(80+(50-latestCR)) : latestCR < 100 ? clamp(30+(100-latestCR)*0.8) : latestCR < 200 ? clamp(10+(200-latestCR)*0.2) : clamp(10-(latestCR-200)*0.02);
   const trRisk = c.scoreTrend === "up" ? 80 : c.scoreTrend === "stable" ? 40 : 15;
   const flRisk = clamp(c.flags.length * 22);
 
   return [
-    { label:"부채비율",         desc:"재무레버리지 위험", weight:40, risk:dRisk,  value:`${latestD}%`,          hint:"200% 초과 고위험" },
-    { label:"영업이익률",       desc:"수익성 위험",       weight:30, risk:oRisk,  value:`${latestO.toFixed(1)}%`, hint:"0% 미만 손실구간" },
+    { label:"부채비율",         desc:"재무레버리지 위험", weight:30, risk:dRisk,  value:`${latestD}%`,          hint:"200% 초과 고위험" },
+    { label:"영업이익률",       desc:"수익성 위험",       weight:25, risk:oRisk,  value:`${latestO.toFixed(1)}%`, hint:"0% 미만 손실구간" },
+    { label:"유동비율",         desc:"단기 유동성 위험",   weight:15, risk:crRisk, value:`${latestCR.toFixed(0)}%`, hint:"100% 미만 위험구간" },
     { label:"스코어 추이",      desc:"위험 방향성",       weight:15, risk:trRisk, value:c.scoreTrend==="up"?"상승↑":c.scoreTrend==="down"?"하락↓":"유지—", hint:"지속 상승 시 가중" },
     { label:"Red Flag 수",     desc:"공시 이상징후",     weight:15, risk:flRisk, value:`${c.flags.length}건`,  hint:"건당 22점 가산" },
   ];
@@ -221,7 +233,7 @@ function MetricAreaChart({ title, data, color, refVal, refLabel }: { title:strin
     <div className="border border-border/60 rounded-xl p-4 bg-card shadow-sm">
       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-3">{title}</p>
       <ResponsiveContainer width="100%" height={148}>
-        <AreaChart data={data} margin={{top:4,right:4,left:-28,bottom:0}}>
+        <AreaChart data={data} margin={{top:4,right:4,left:0,bottom:0}}>
           <defs>
             <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor={color} stopOpacity={0.18}/>
@@ -230,7 +242,7 @@ function MetricAreaChart({ title, data, color, refVal, refLabel }: { title:strin
           </defs>
           <CartesianGrid strokeDasharray="2 4" stroke="currentColor" strokeOpacity={0.06}/>
           <XAxis dataKey="year" tick={{fontSize:10,fontFamily:"'JetBrains Mono',monospace",fill:"currentColor",opacity:0.45}} axisLine={false} tickLine={false}/>
-          <YAxis tick={{fontSize:10,fontFamily:"'JetBrains Mono',monospace",fill:"currentColor",opacity:0.45}} axisLine={false} tickLine={false}/>
+          <YAxis width={44} tickFormatter={fmtAxisValue} tick={{fontSize:10,fontFamily:"'JetBrains Mono',monospace",fill:"currentColor",opacity:0.45}} axisLine={false} tickLine={false}/>
           <Tooltip content={<ChartTooltip/>}/>
           {refVal!==undefined&&<ReferenceLine y={refVal} stroke={color} strokeDasharray="3 3" strokeOpacity={0.5} label={{value:refLabel,fontSize:9,fill:color,position:"insideTopRight"}}/>}
           <Area type="monotone" dataKey="value" stroke={color} strokeWidth={2} fill={`url(#${id})`} dot={{r:3,fill:color,strokeWidth:0}} activeDot={{r:5,strokeWidth:0}}/>
@@ -290,7 +302,7 @@ function ScoreBreakdownPanel({ company, onClose }: { company: Company; onClose: 
           </div>
         </div>
         <p className="text-[10px] text-muted-foreground/60 pb-1">
-          * 가중치: 부채비율(40%) + 영업이익률(30%) + 스코어추이(15%) + Red Flag(15%) = 100%
+          * 가중치: 부채비율(30%) + 영업이익률(25%) + 유동비율(15%) + 스코어추이(15%) + Red Flag(15%) = 100%
         </p>
       </div>
     </div>
@@ -847,12 +859,77 @@ function RedFlagCard({ flag }: { flag:AiFlag }) {
   );
 }
 
+// ── News Tab (기사분석) ───────────────────────────────────────────────────────
+
+const NEWS_CATEGORIES = ["소송","지급보증","약정사항","특수관계자"] as const;
+
+function NewsTab({ companyId }: { companyId: number }) {
+  const [news, setNews] = useState<Record<string, NewsArticle[]> | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setNews(null); setError(false);
+    api.getCompanyNews(companyId).then(setNews).catch(() => setError(true));
+  }, [companyId]);
+
+  if (error) {
+    return <div className="flex items-center justify-center py-20 text-[12px] text-muted-foreground">기사를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</div>;
+  }
+  if (news === null) {
+    return <div className="flex items-center justify-center py-20 text-[12px] text-muted-foreground">최근 6개월 기사를 검색하는 중…</div>;
+  }
+
+  const total = NEWS_CATEGORIES.reduce((s, c) => s + (news[c]?.length ?? 0), 0);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40">
+        <Newspaper size={13} className="text-blue-500 flex-shrink-0"/>
+        <p className="text-[12px] text-blue-700 dark:text-blue-400">
+          최근 6개월 언론 보도를 카테고리별로 검색한 결과입니다 (총 {total}건) · 출처 링크로 원문을 확인하세요 · 검색 기반 수집이므로 무관한 기사가 섞일 수 있습니다
+        </p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {NEWS_CATEGORIES.map(category => {
+          const articles = news[category] ?? [];
+          return (
+            <div key={category} className="border border-border/60 rounded-xl bg-card shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-border/60 bg-muted/30 flex items-center justify-between">
+                <span className="text-[12px] font-semibold">{category}</span>
+                <span className="text-[10px] font-mono text-muted-foreground">{articles.length}건</span>
+              </div>
+              {articles.length === 0 ? (
+                <p className="px-4 py-6 text-[12px] text-muted-foreground text-center">최근 6개월 내 관련 기사가 없습니다</p>
+              ) : (
+                <ul className="divide-y divide-border/40">
+                  {articles.map((a, i) => (
+                    <li key={i}>
+                      <a href={a.link} target="_blank" rel="noopener noreferrer" className="block px-4 py-3 hover:bg-muted/30 transition-colors">
+                        <p className="text-[12px] leading-snug mb-1">{a.title}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono flex items-center gap-1.5">
+                          {a.source && <span>{a.source}</span>}
+                          {a.publishedAt && <span>· {fmtDate(a.publishedAt)}</span>}
+                          <ExternalLink size={9} className="inline"/>
+                        </p>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Detail View ───────────────────────────────────────────────────────────────
 
 function DetailView({ company, onBack, isWatched, toggleWatch }: {
   company:Company; onBack:()=>void; isWatched:boolean; toggleWatch:()=>void;
 }) {
-  const [tab,setTab]=useState<"quant"|"ai"|"ownership">("quant");
+  const [tab,setTab]=useState<"quant"|"ai"|"news"|"report">("quant");
   const [showBreakdown,setShowBreakdown]=useState(false);
   const lv=getRisk(company.score);
   const latestD=company.debtRatio.at(-1)?.value??null;
@@ -933,7 +1010,7 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
 
         <div className="border-b border-border/60 px-6 bg-card/20">
           <div className="flex">
-            {([{id:"quant" as const,label:"정량 지표"},{id:"ai" as const,label:"AI 정성 분석"},{id:"ownership" as const,label:"지분·특수관계자"}]).map(({id,label})=>(
+            {([{id:"quant" as const,label:"정량 지표"},{id:"ai" as const,label:"AI 정성 분석"},{id:"news" as const,label:"기사분석"},{id:"report" as const,label:"보고서 정보"}]).map(({id,label})=>(
               <button key={id} onClick={()=>setTab(id)}
                 className={`px-5 py-3.5 text-[12px] border-b-2 transition-all font-medium ${tab===id?"border-blue-500 text-blue-500":"border-transparent text-muted-foreground hover:text-foreground"}`}>
                 {label}
@@ -948,12 +1025,14 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
               <MetricAreaChart title="매출액 (억원)" data={company.revenue} color="#3b82f6"/>
               <MetricAreaChart title="부채비율 (%)" data={company.debtRatio} color="#ef4444" refVal={100} refLabel="100%"/>
               <MetricAreaChart title="영업이익률 (%)" data={company.opMargin} color="#10b981" refVal={0} refLabel="BEP"/>
+              <MetricAreaChart title="유동비율 (%)" data={company.currentRatio} color="#8b5cf6" refVal={100} refLabel="100%"/>
               <div className="border border-border/60 rounded-xl p-4 bg-card shadow-sm">
                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mb-3">지표 해석</p>
                 <div className="space-y-2.5 text-[11px]">
                   {[
-                    { name:"부채비율", desc:"100% 이하 양호 · 200% 초과 고위험 · 음수는 자본잠식", color:"#ef4444" },
-                    { name:"영업이익률", desc:"0% 미만 시 손실 구간 진입", color:"#10b981" },
+                    { name:"부채비율", desc:"부채총계÷자본총계. 100% 이하 양호 · 200% 초과 고위험 · 음수는 자본잠식", color:"#ef4444" },
+                    { name:"영업이익률", desc:"영업이익÷매출액. 0% 미만 시 손실 구간 진입", color:"#10b981" },
+                    { name:"유동비율", desc:"유동자산÷유동부채. 100% 미만이면 1년 내 상환 부채가 유동자산 초과", color:"#8b5cf6" },
                   ].map(({name,desc,color})=>(
                     <div key={name} className="flex items-start gap-2">
                       <span className="font-mono font-semibold w-24 flex-shrink-0 mt-px" style={{color}}>{name}</span>
@@ -987,38 +1066,17 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
             </div>
           )}
 
-          {tab==="ownership"&&(
+          {tab==="news"&&<NewsTab companyId={company.id}/>}
+
+          {tab==="report"&&(
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
-                <h3 className="text-[13px] font-semibold mb-3">주주 구성</h3>
-                <div className="border border-border/60 rounded-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-[12px]">
-                    <thead><tr className="border-b border-border/60 bg-muted/40">
-                      {["주주","구분","지분율"].map(h=><th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{h}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {company.ownership.map((o,i)=>(
-                        <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
-                          <td className="px-4 py-3 font-medium">{o.entity}</td>
-                          <td className="px-4 py-3"><span className="text-[10px] px-1.5 py-px rounded border border-border/60 bg-muted/50 text-muted-foreground">{o.type}</span></td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
-                                <div className="h-full rounded-full bg-blue-500" style={{width:`${Math.min(o.share*1.5,100)}%`}}/>
-                              </div>
-                              <span className="font-mono text-[12px] font-medium">{o.share}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-4 p-3 rounded-lg border border-border/50 bg-muted/20">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">감사 정보</p>
-                  <div className="space-y-1 text-[12px]">
+                <div className="p-4 rounded-xl border border-border/60 bg-card shadow-sm">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-3">보고서 · 감사 정보</p>
+                  <div className="space-y-2 text-[12px]">
                     <div className="flex justify-between"><span className="text-muted-foreground">감사인</span><span className="font-medium">{company.auditor??"정보 없음"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">대상 보고서</span><span className="font-medium">{company.fiscalYear??"—"}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">공시 접수일</span><span className="font-mono font-medium">{fmtDate(company.lastDisclosure)}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">DART 공시번호</span>
                       {dartUrl ? (
                         <a href={dartUrl} target="_blank" rel="noopener noreferrer"
@@ -1030,33 +1088,34 @@ function DetailView({ company, onBack, isWatched, toggleWatch }: {
                   </div>
                 </div>
               </div>
-
-              <div>
-                <h3 className="text-[13px] font-semibold mb-3">특수관계자 거래 타임라인</h3>
-                {company.relatedTx.length===0?(
-                  <div className="border border-border/60 rounded-xl p-10 flex items-center justify-center text-[12px] text-muted-foreground shadow-sm">공시된 특수관계자 거래가 없습니다</div>
-                ):(
-                  <div className="space-y-0">
-                    {company.relatedTx.map((tx,i)=>(
-                      <div key={i} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className="size-2.5 rounded-full bg-blue-500 mt-4 flex-shrink-0 shadow-sm shadow-blue-500/50"/>
-                          {i<company.relatedTx.length-1&&<div className="w-px flex-1 mt-1" style={{background:"linear-gradient(to bottom,rgb(59 130 246/0.4),transparent)"}}/>}
-                        </div>
-                        <div className="pb-5 flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono text-[10px] text-muted-foreground">{tx.date}</span>
-                            <span className="text-[10px] px-1.5 py-px rounded border border-border/60 bg-muted/50 text-muted-foreground">{tx.type}</span>
-                            <span className="font-mono text-[12px] font-semibold text-blue-500">{fmtAmount(tx.amount)}</span>
-                          </div>
-                          <p className="text-[12px] font-medium">{tx.party}</p>
-                          <p className="text-[11px] text-muted-foreground">{tx.desc}</p>
-                        </div>
-                      </div>
-                    ))}
+              {company.ownership.length>0&&(
+                <div>
+                  <h3 className="text-[13px] font-semibold mb-3">주주 구성</h3>
+                  <div className="border border-border/60 rounded-xl overflow-hidden shadow-sm">
+                    <table className="w-full text-[12px]">
+                      <thead><tr className="border-b border-border/60 bg-muted/40">
+                        {["주주","구분","지분율"].map(h=><th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{h}</th>)}
+                      </tr></thead>
+                      <tbody>
+                        {company.ownership.map((o,i)=>(
+                          <tr key={i} className="border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 font-medium">{o.entity}</td>
+                            <td className="px-4 py-3"><span className="text-[10px] px-1.5 py-px rounded border border-border/60 bg-muted/50 text-muted-foreground">{o.type}</span></td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div className="h-full rounded-full bg-blue-500" style={{width:`${Math.min(o.share*1.5,100)}%`}}/>
+                                </div>
+                                <span className="font-mono text-[12px] font-medium">{o.share}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1078,6 +1137,7 @@ function CompareView({ allCompanies, compareIds, setCompareIds }: { allCompanies
     { label:"시가총액", fmt:c=>fmtMarketCap(c.marketCap), highlight:null },
     { label:"부채비율 (%)", fmt:c=>c.debtRatio.at(-1)?.value??"—", highlight:"high" },
     { label:"영업이익률 (%)", fmt:c=>c.opMargin.at(-1)?.value.toFixed(1)??"—", highlight:"low" },
+    { label:"유동비율 (%)", fmt:c=>c.currentRatio.at(-1)?.value.toFixed(0)??"—", highlight:"low" },
     { label:"Red Flag 수", fmt:c=>c.flags.length, highlight:"high" },
     { label:"감사인", fmt:c=>c.auditor, highlight:null },
     { label:"최근 공시일", fmt:c=>fmtDate(c.lastDisclosure), highlight:null },

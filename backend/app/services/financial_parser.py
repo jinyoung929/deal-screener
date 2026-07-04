@@ -14,6 +14,8 @@ ACCOUNT_ID_MAP: dict[str, str] = {
     "ifrs-full_Liabilities": "total_liabilities",
     "ifrs-full_Equity": "total_equity",
     "ifrs-full_EquityAttributableToOwnersOfParent": "total_equity",
+    "ifrs-full_CurrentAssets": "current_assets",
+    "ifrs-full_CurrentLiabilities": "current_liabilities",
     "ifrs-full_Revenue": "revenue",
     "dart_OperatingIncomeLoss": "operating_income",
     "ifrs-full_TradeAndOtherCurrentReceivables": "receivables",
@@ -26,6 +28,8 @@ ACCOUNT_ID_MAP: dict[str, str] = {
 ACCOUNT_NAME_FALLBACK: dict[str, list[str]] = {
     "total_liabilities": ["부채총계"],
     "total_equity": ["자본총계"],
+    "current_assets": ["유동자산"],
+    "current_liabilities": ["유동부채"],
     "revenue": ["매출액", "수익(매출액)", "영업수익"],
     "operating_income": ["영업이익"],
     "receivables": ["매출채권"],

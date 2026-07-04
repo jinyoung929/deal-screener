@@ -45,6 +45,7 @@ class MetricsHistory(Base):
     revenue: Mapped[float | None] = mapped_column(Float, nullable=True)
     debt_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
     op_margin: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     company: Mapped["Company"] = relationship(back_populates="metrics_history")
 

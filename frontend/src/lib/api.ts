@@ -22,6 +22,13 @@ export interface ApiUser {
   name: string | null;
 }
 
+export interface NewsArticle {
+  title: string;
+  link: string;
+  source: string | null;
+  publishedAt: string | null;
+}
+
 export const api = {
   getCompanies: () => request<any[]>("/api/companies"),
   getCompany: (id: number) => request<any>(`/api/companies/${id}`),
@@ -31,6 +38,7 @@ export const api = {
       body: JSON.stringify({ ticker, sector }),
     }),
   removeCompany: (id: number) => request<{ status: string }>(`/api/companies/${id}`, { method: "DELETE" }),
+  getCompanyNews: (id: number) => request<Record<string, NewsArticle[]>>(`/api/companies/${id}/news`),
 
   getMe: () => request<ApiUser | null>("/auth/me"),
   loginUrl: "/auth/google/login",

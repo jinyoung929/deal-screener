@@ -85,7 +85,8 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
     for year, m in parsed_by_year.items():
         d_ratio = scoring.debt_ratio(m)
         o_margin = scoring.op_margin(m)
-        year_ratios[year] = {"debt_ratio": d_ratio, "op_margin": o_margin}
+        c_ratio = scoring.current_ratio(m)
+        year_ratios[year] = {"debt_ratio": d_ratio, "op_margin": o_margin, "current_ratio": c_ratio}
 
         row = existing_rows.get(year)
         if row is None:
@@ -99,6 +100,7 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
         row.revenue = revenue_won / 1e8 if revenue_won is not None else None
         row.debt_ratio = d_ratio
         row.op_margin = o_margin
+        row.current_ratio = c_ratio
 
     # --- flags (rule-based, only when we have two comparable years) ---
     detected = []
@@ -107,6 +109,7 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
             curr_metrics, prev_metrics,
             year_ratios[latest_year]["debt_ratio"],
             year_ratios[prev_year]["debt_ratio"],
+            curr_current_ratio=year_ratios[latest_year]["current_ratio"],
         )
 
     db.query(Flag).filter(Flag.company_id == company.id).delete()
@@ -133,6 +136,7 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
     breakdown = scoring.compute_breakdown(
         latest_debt_ratio=year_ratios[latest_year]["debt_ratio"],
         latest_op_margin=year_ratios[latest_year]["op_margin"],
+        latest_current_ratio=year_ratios[latest_year]["current_ratio"],
         score_trend=trend,
         flag_count=len(detected),
     )
@@ -145,6 +149,11 @@ def sync_company(db: Session, company: Company, years: list[str]) -> dict:
     latest_raw = raw_by_year.get(latest_year) or []
     if latest_raw:
         company.dart_no = latest_raw[0].get("rcept_no") or company.dart_no
+
+    try:
+        company.auditor = dart_client.fetch_auditor(company.corp_code, latest_year) or company.auditor
+    except Exception:
+        pass  # auditor is nice-to-have; never fail the whole sync over it
 
     db.add(ScoreHistory(
         company_id=company.id,

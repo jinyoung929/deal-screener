@@ -8,7 +8,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Company, User
 from app.serializers import company_to_dict
-from app.services import dart_client, sync_service
+from app.services import dart_client, news_client, sync_service
 
 router = APIRouter(prefix="/api/companies", tags=["companies"])
 
@@ -32,6 +32,16 @@ def get_company(company_id: int, db: Session = Depends(get_db)):
     if company is None:
         raise HTTPException(status_code=404, detail="Company not found")
     return company_to_dict(company)
+
+
+@router.get("/{company_id}/news")
+def get_company_news(company_id: int, db: Session = Depends(get_db)):
+    """기사분석 tab: last-6-months news screening per risk category
+    (소송/지급보증/약정사항/특수관계자), with source links."""
+    company = db.get(Company, company_id)
+    if company is None:
+        raise HTTPException(status_code=404, detail="Company not found")
+    return news_client.fetch_company_news(company.name)
 
 
 @router.post("")
