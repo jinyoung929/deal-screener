@@ -2,10 +2,17 @@
 
 DART 공시 데이터를 기반으로 상장사의 재무 부실 징후와 잠재 M&A 타겟을 스크리닝하는 대시보드. 정량 지표(부채비율, 영업이익률)와 규칙 기반 Red Flag 탐지는 모두 DART Open API에서 실시간으로 가져온 실제 재무제표 수치로 계산되며, 값을 확보하지 못한 항목은 "데이터 부족"으로 표시하고 절대 임의로 채우지 않습니다.
 
+## 화면 이미지
+
+<img width="1440" height="815" alt="스크린샷 2026-07-05 오후 8 21 59" src="https://github.com/user-attachments/assets/009ae685-93f4-489a-a4cf-f8f37f1fe922" />
+
+<img width="1438" height="812" alt="스크린샷 2026-07-05 오후 8 22 29" src="https://github.com/user-attachments/assets/e0922a4c-16b5-4245-b43d-e6b6e067e1a9" />
+
+
 ## 구조
 
 - `frontend/` — Vite + React + TypeScript (원본 Figma Make 프로토타입 UI를 실데이터 연동으로 전환)
-- `backend/` — FastAPI. DART 동기화, 정량 스코어링, 규칙기반 Red Flag 탐지, Gemini 기반 자연어 요약, REST API, Google OAuth
+- `backend/` — FastAPI. DART 동기화, Gemini ai, REST API, Google OAuth
 - 배포 시 `backend`가 `frontend`의 빌드 결과물을 함께 서빙하는 단일 서비스로 동작 (`backend/app/main.py`)
 
 ## 로컬 개발
