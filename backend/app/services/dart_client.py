@@ -7,6 +7,7 @@ Only the two endpoints DealScreener needs:
 """
 
 import io
+import time
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -18,6 +19,14 @@ BASE_URL = "https://opendart.fss.or.kr/api"
 
 # reprt_code=11011 -> annual business report (사업보고서)
 ANNUAL_REPORT_CODE = "11011"
+
+# corpCode.xml is the full KRX registry (tens of thousands of entries, a
+# multi-MB zip). Downloading + parsing it on every "add company" click was
+# the main source of the slow "DART에서 조회 중". It changes at most daily,
+# so we parse it once and cache the whole ticker -> corp_code map in-process.
+_CORP_CODE_TTL = 24 * 3600
+_corp_code_cache: dict[str, str] | None = None
+_corp_code_cached_at: float = 0.0
 
 
 class DartApiError(RuntimeError):
@@ -31,21 +40,34 @@ def _api_key() -> str:
     return key
 
 
-def fetch_corp_code_map(tickers: set[str]) -> dict[str, str]:
-    """Download the full corp_code registry once and return ticker -> corp_code
-    for just the tickers we care about."""
-    resp = httpx.get(f"{BASE_URL}/corpCode.xml", params={"crtfc_key": _api_key()}, timeout=30)
+def _load_corp_code_registry() -> dict[str, str]:
+    """Full ticker -> corp_code map for every listed company, cached."""
+    global _corp_code_cache, _corp_code_cached_at
+    if _corp_code_cache is not None and time.time() - _corp_code_cached_at < _CORP_CODE_TTL:
+        return _corp_code_cache
+
+    resp = httpx.get(f"{BASE_URL}/corpCode.xml", params={"crtfc_key": _api_key()}, timeout=60)
     resp.raise_for_status()
     with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
         xml_bytes = zf.read("CORPCODE.xml")
 
     root = ET.fromstring(xml_bytes)
-    result: dict[str, str] = {}
+    registry: dict[str, str] = {}
     for node in root.findall("list"):
         stock_code = (node.findtext("stock_code") or "").strip()
-        if stock_code in tickers:
-            result[stock_code] = (node.findtext("corp_code") or "").strip()
-    return result
+        if stock_code:  # skip unlisted entries with no stock code
+            registry[stock_code] = (node.findtext("corp_code") or "").strip()
+
+    _corp_code_cache = registry
+    _corp_code_cached_at = time.time()
+    return registry
+
+
+def fetch_corp_code_map(tickers: set[str]) -> dict[str, str]:
+    """ticker -> corp_code for the requested tickers, served from the cached
+    full registry (first call warms the cache, later calls are instant)."""
+    registry = _load_corp_code_registry()
+    return {t: registry[t] for t in tickers if t in registry}
 
 
 def fetch_company_name(corp_code: str) -> str | None:

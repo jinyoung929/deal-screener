@@ -32,9 +32,18 @@ def _template_fallback(tag: str, basis: str) -> str:
     return f"{tag}: {basis}"
 
 
+# Once Gemini fails in this process (most commonly a 429 quota error), stop
+# calling it for the rest of the run. Otherwise every subsequent flag pays a
+# full round-trip only to fail again -- a company with several flags would
+# spend many wasted seconds on the "add company" path with the quota
+# exhausted.
+_gemini_disabled = False
+
+
 def summarize_flag(tag: str, basis: str) -> str:
+    global _gemini_disabled
     settings = get_settings()
-    if not settings.gemini_api_key:
+    if _gemini_disabled or not settings.gemini_api_key:
         return _template_fallback(tag, basis)
 
     try:
@@ -44,5 +53,7 @@ def summarize_flag(tag: str, basis: str) -> str:
         text = (response.text or "").strip()
         return text or _template_fallback(tag, basis)
     except Exception:
-        # Never let an LLM/network hiccup break the sync job.
+        # Never let an LLM/network hiccup break the sync job; skip Gemini for
+        # the rest of this run so we don't repeat the slow failure per flag.
+        _gemini_disabled = True
         return _template_fallback(tag, basis)
