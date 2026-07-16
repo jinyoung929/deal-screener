@@ -121,10 +121,11 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # 아래 환경변수 채우기
-alembic upgrade head           # 또는 SQLite 기본값으로 최초 실행 시 자동 생성
+alembic upgrade head           # 스키마는 Alembic으로만 관리 (앱은 테이블을 만들지 않음)
 uvicorn app.main:app --reload --port 8000
 ```
 `DATABASE_URL` 미설정 시 로컬 SQLite(`backend/dealscreener.db`)로 동작합니다.
+스키마 생성은 로컬·프로덕션 모두 `alembic upgrade head`로 처리하므로, 앱 실행 전 반드시 한 번 실행해야 합니다.
 
 ### 프론트엔드
 ```bash

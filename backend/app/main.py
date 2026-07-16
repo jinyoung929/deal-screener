@@ -6,15 +6,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import get_settings
-from app.database import Base, engine
 from app.routers import alerts, auth, companies, sync, watchlist
 
 settings = get_settings()
 
-# Local dev convenience: create tables directly against SQLite if no
-# migration has run yet. Neon/Postgres in real deployments should go
-# through Alembic (see backend/alembic/).
-Base.metadata.create_all(bind=engine)
+# Schema is managed exclusively by Alembic -- both local dev and production
+# run `alembic upgrade head` before the app starts (see README / Dockerfile),
+# so the app process itself never creates tables.
 
 app = FastAPI(title="DealScreener API")
 
